@@ -1,0 +1,33 @@
+# Local character assets, debugging tools and historical validation evidence
+/.local/
+/release/
+/dist/
+/tests/output/
+
+# Python and editor files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Model/project files are not part of this source repository
+*.blend
+*.blend[0-9]*
+*.blend@*
+*.fbx
+*.pmx
+*.pmd
+*.vmd
+*.zip
+
+# Local credentials and machine configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key

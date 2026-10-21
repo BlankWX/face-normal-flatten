@@ -1,0 +1,27 @@
+name: Bug report / 问题反馈
+description: Report a reproducible problem with normals, controls, or installation.
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Add-on and Blender versions / 插件与 Blender 版本
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      description: Include direction, transition/jaw values, region groups, and modifier order.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual results / 预期与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Minimal example or screenshots / 最小示例或截图
+      description: Use assets you have permission to share and remove private information.
