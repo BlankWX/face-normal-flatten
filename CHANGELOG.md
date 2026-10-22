@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- Add dynamic modifier transition as the default UI mode, keeping native Normal Edit after the armature.
+- Reuse existing Normal Edit settings or create the RADIAL / ADD / Y=2 preset when absent.
+- Generate a smooth influence group with the existing outer-root, hole, and jaw controls. Preserve and multiply any previous modifier mask.
+- Restore pre-flatten normal storage when migrating v1 scenes, avoiding baked/native double processing.
+- Support repeated updates and restoration of managed groups, bindings, visibility, and stack order. Retain the legacy static mode.
+- Add ten native Blender integration cases covering poses, expressions, creation, migration, persistence, masks and rollback.
+
 ## 1.1.0
 
 - Add **下颌过渡下移**, a signed jaw-transition control relative to face width: positive values compress the lower transition toward the contour, negative values expand it upward, and zero exactly preserves the previous result.

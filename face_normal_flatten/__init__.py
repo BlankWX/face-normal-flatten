@@ -3,10 +3,10 @@
 bl_info = {
     "name": "Face Normal Flatten / 脸部法线平面化",
     "author": "BlankWX",
-    "version": (1, 1, 0),
+    "version": (1, 2, 0),
     "blender": (5, 2, 0),
     "location": "View3D > Sidebar > 脸部法线",
-    "description": "统一面部中心法线，并在面部外缘平滑恢复原始法线",
+    "description": "保留骨架后的实时法线编辑，并在面部外缘平滑过渡；兼容静态模式",
     "category": "Mesh",
 }
 
@@ -87,7 +87,8 @@ def detect_forward(mesh, polygons=None):
     return direction.normalized()
 
 
-def apply_flatten(obj, settings=None):
+def calculate_flatten(obj, settings=None):
+    """Validate and calculate the common transition without mutating Blender data."""
     if obj.type != 'MESH' or obj.mode != 'OBJECT':
         raise ValueError("请在物体模式选择独立的脸部网格。")
     settings = settings or obj.fnf_settings
@@ -145,7 +146,7 @@ def apply_flatten(obj, settings=None):
                              jaw_offset_ratio=settings.jaw_offset_ratio,
                              jaw_up_axis=axes[settings.jaw_up_direction])
     if not any(w >= 0.999999 for w in result['weights']):
-        raise ValueError("过渡带覆盖了整张脸，没有完全平面化的中心。请减小过渡宽度。")
+        raise ValueError("过渡带覆盖了整张脸，没有完整作用的中心。请减小过渡宽度。")
     if not protected and any(c.get('outer_loop_confidence') == 'low'
                              for c in result['stats'].get('component_stats', [])):
         raise ValueError("外边界识别可信度低，请指定作用范围或根部顶点组。")
@@ -159,7 +160,17 @@ def apply_flatten(obj, settings=None):
     result['root_vertex_ids'] = [ids[i] for i in result['root_vertex_ids']]
     result['stats']['scope_vertex_count'] = len(ids)
     result['stats']['excluded_vertex_count'] = len(me.vertices) - len(ids)
-    state = snapshot(obj)
+    return result, forward, old_state
+
+
+def apply_flatten(obj, settings=None):
+    """Legacy static API; the UI dispatches through apply_effect instead."""
+    settings = settings or obj.fnf_settings
+    result, forward, old_state = calculate_flatten(obj, settings)
+    if old_state and old_state.get('dynamic'):
+        raise ValueError("请先恢复应用前状态，再切换到静态模式。")
+    me = obj.data
+    snapshot(obj)
     from .storage import write_precise_tangent_normals
     try:
         result['stats']['storage'] = write_precise_tangent_normals(me, result['corner_normals'])
@@ -185,11 +196,8 @@ def apply_flatten(obj, settings=None):
     return result
 
 
-def restore_normals(obj):
-    me = obj.data
-    state = read_backup(obj)
-    if not state:
-        raise ValueError("当前网格没有插件原法线备份。")
+def restore_base_normals(me, state):
+    """Restore original storage while retaining the persistent backup."""
     raw = me.attributes.get(RAW)
     if raw:
         field = 'vector' if raw.data_type == 'FLOAT_VECTOR' else 'value'
@@ -208,11 +216,24 @@ def restore_normals(obj):
         current = me.attributes.get('custom_normal')
         if current:
             me.attributes.remove(current)
-    for item in state['normal_modifiers']:
-        modifier = obj.modifiers.get(item['name'])
-        if modifier and modifier.type == 'NORMAL_EDIT':
-            modifier.show_viewport = item['viewport']
-            modifier.show_render = item['render']
+    me.update()
+
+
+def restore_normals(obj):
+    me = obj.data
+    state = read_backup(obj)
+    if not state:
+        raise ValueError("当前网格没有插件原法线备份。")
+    if state.get('dynamic'):
+        from .dynamic import restore_dynamic
+        restore_dynamic(obj, state['dynamic'])
+    else:
+        for item in state['normal_modifiers']:
+            modifier = obj.modifiers.get(item['name'])
+            if modifier and modifier.type == 'NORMAL_EDIT':
+                modifier.show_viewport = item['viewport']
+                modifier.show_render = item['render']
+    restore_base_normals(me, state)
     for name in (BASE, RAW, WEIGHT):
         attr = me.attributes.get(name)
         if attr:
@@ -222,10 +243,22 @@ def restore_normals(obj):
         if key in obj:
             del obj[key]
     me.update()
-    obj.fnf_settings.status = "已恢复原始法线和法线编辑修改器"
+    obj.fnf_settings.status = "已恢复原始法线和修改器，已移除插件生成的过渡组"
+
+
+def apply_effect(obj, settings=None):
+    settings = settings or obj.fnf_settings
+    if settings.effect_mode == 'DYNAMIC':
+        from .dynamic import apply_dynamic
+        return apply_dynamic(obj, settings)
+    return apply_flatten(obj, settings)
 
 
 class FNF_Settings(PropertyGroup):
+    effect_mode: EnumProperty(name="工作模式", items=[
+        ('DYNAMIC', '动态修改器过渡', '保留骨架后的法线编辑，实时计算；插件只生成过渡权重'),
+        ('STATIC', '静态平面化（旧版）', '一次性写入统一的自定义法线，随网格变形')], default='DYNAMIC')
+    normal_modifier: StringProperty(name="法线编辑修改器", description="留空时自动选择唯一的法线编辑；没有则按径向、相加、Y=2创建。有多个时请明确指定")
     direction: EnumProperty(name="面部朝向", items=[
         ('AUTO', '自动识别', '根据面片面积法线识别主要朝向'),
         ('NEG_Y', '-Y', ''), ('Y', '+Y', ''), ('X', '+X', ''),
@@ -258,7 +291,7 @@ class FNF_OT_apply(Operator):
 
     def execute(self, context):
         try:
-            result = apply_flatten(context.object)
+            result = apply_effect(context.object)
             self.report({'INFO'}, context.object.fnf_settings.status)
             return {'FINISHED'}
         except (ValueError, RuntimeError) as exc:
@@ -268,7 +301,7 @@ class FNF_OT_apply(Operator):
 
 class FNF_OT_restore(Operator):
     bl_idname = 'object.fnf_restore'
-    bl_label = '恢复原始法线'
+    bl_label = '恢复原始法线 / 解除过渡'
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -301,7 +334,10 @@ class FNF_PT_panel(Panel):
             return
         settings = obj.fnf_settings
         layout.label(text=obj.name, icon='MESH_DATA')
-        layout.prop(settings, 'direction')
+        layout.prop(settings, 'effect_mode')
+        if settings.effect_mode == 'DYNAMIC':
+            layout.prop_search(settings, 'normal_modifier', obj, 'modifiers')
+        layout.prop(settings, 'direction', text='边界识别朝向' if settings.effect_mode == 'DYNAMIC' else '面部朝向')
         if settings.direction == 'CUSTOM':
             layout.prop(settings, 'custom_forward')
         layout.prop(settings, 'transition_ratio', slider=True)
@@ -311,15 +347,29 @@ class FNF_PT_panel(Panel):
             layout.prop(settings, 'jaw_up_direction')
         layout.prop_search(settings, 'region_group', obj, 'vertex_groups')
         layout.prop_search(settings, 'root_group', obj, 'vertex_groups')
-        layout.operator('object.fnf_apply', icon='NORMALS_FACE')
+        layout.operator('object.fnf_apply', text='创建 / 更新动态过渡' if settings.effect_mode == 'DYNAMIC' else '应用 / 更新平面化', icon='NORMALS_FACE')
         layout.operator('object.fnf_restore', icon='LOOP_BACK')
+        if settings.effect_mode == 'DYNAMIC':
+            from .dynamic import panel_modifier
+            modifier = panel_modifier(obj)
+            if modifier:
+                box = layout.box()
+                box.label(text=f'实时法线：{modifier.name}', icon='MOD_NORMALEDIT')
+                box.prop(modifier, 'mode')
+                box.prop(modifier, 'target')
+                box.prop(modifier, 'offset')
+                box.prop(modifier, 'mix_mode')
+                box.prop(modifier, 'mix_factor')
+            layout.label(text="骨架后实时计算；中心保留修改器效果")
+            layout.label(text="修改器参数即时生效，过渡参数需更新")
         layout.label(text="自动模式跳过眼睛和嘴巴内孔")
         layout.label(text="调整参数后点击应用 / 更新")
         if STATE in obj.data:
             layout.label(text="原法线备份随 .blend 保存", icon='CHECKMARK')
             try:
                 stats = json.loads(obj.get('fnf_last_stats','{}'))
-                layout.label(text=f"平面中心：{stats.get('flat_vertex_count',0)} 顶点")
+                center = '完整作用' if stats.get('mode') == 'DYNAMIC' else '平面中心'
+                layout.label(text=f"{center}：{stats.get('flat_vertex_count',0)} 顶点")
                 layout.label(text=f"平滑过渡：{stats.get('transition_vertex_count',0)} 顶点")
             except (ValueError, TypeError):
                 pass

@@ -24,7 +24,7 @@ class PublicReleaseTests(unittest.TestCase):
         return root
 
     def test_version_does_not_require_blender(self):
-        self.assertEqual(packaging.read_version(ROOT), "1.1.0")
+        self.assertEqual(packaging.read_version(ROOT), "1.2.0")
 
     def test_archives_include_license_and_installable_structure(self):
         with tempfile.TemporaryDirectory() as directory:

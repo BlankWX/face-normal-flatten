@@ -48,8 +48,14 @@ def main():
         report = generality.run(options.output)
         if not report['all_passed']:
             raise AssertionError('Synthetic Blender integration tests did not all pass')
+        dynamic = importlib.import_module('test_dynamic')
+        dynamic_report = dynamic.run((options.output or repository / 'tests/output/generality.json').with_name('dynamic.json'))
+        if not dynamic_report['all_passed']:
+            failures = [c for c in dynamic_report['cases'] if not c['passed']]
+            raise AssertionError(json.dumps(failures, ensure_ascii=False))
         print(json.dumps({'status': 'passed', 'case_count': report['case_count'],
-                          'passed_count': report['passed_count'], 'report': report['output_path']},
+                          'passed_count': report['passed_count'], 'report': report['output_path'],
+                          'dynamic_passed':dynamic_report['passed_count']},
                          ensure_ascii=False))
     finally:
         if registered:

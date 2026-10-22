@@ -11,7 +11,7 @@ body:
     id: steps
     attributes:
       label: Steps to reproduce / 复现步骤
-      description: Include direction, transition/jaw values, region groups, and modifier order.
+      description: Include working mode, direction, transition/jaw values, region/root groups, and modifier order. For dynamic mode, include Normal Edit mode, target/offset, mixing settings, and its vertex-group mask.
     validations:
       required: true
   - type: textarea

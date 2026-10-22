@@ -4,7 +4,7 @@ Small, reproducible examples are especially useful for a tool that depends on me
 
 ## Report a problem
 
-Include the Blender and add-on versions, reproduction steps, forward/up axes, parameter values, and whether region or root groups are used. Describe the expected shading and what happened instead. An anonymized synthetic mesh is preferred; share a real asset only when you have permission to distribute it.
+Include the Blender and add-on versions, working mode, reproduction steps, forward/up axes, parameter values, and whether region or root groups are used. For dynamic mode, include the Normal Edit mode, target or offset, mixing settings, vertex-group mask, and modifier stack order. Describe the expected shading and what happened instead. An anonymized synthetic mesh is preferred; share a real asset only when you have permission to distribute it.
 
 For a shading issue, include front and oblique views under the same lighting. For an apply/restore error, include the full error text and whether topology or mesh users changed after the first application.
 
@@ -12,6 +12,7 @@ For a shading issue, include front and oblique views under the same lighting. Fo
 
 - `face_normal_flatten/core.py`: pure Python geometry and normal blending.
 - `face_normal_flatten/storage.py`: Blender custom-normal encoding.
+- `face_normal_flatten/dynamic.py`: native modifier creation, transition masks, migration, and restoration.
 - `face_normal_flatten/__init__.py`: Blender operators, backup state, and interface.
 
 Keep the pure core independent of Blender. Preserve exact zero-offset compatibility, protected-root behavior, corner correspondence, deformation-aware storage, and restoration. Do not silently discard invalid backups or guess a face region on an entire character.
@@ -24,7 +25,7 @@ python tools/test_blender.py --blender /path/to/blender
 python tools/package_addon.py
 ```
 
-Changes to Blender storage, backup/restore, or operators require Blender integration checks. New geometry behavior should have a small synthetic regression case. Explain what changed, why, what was tested, and any unverified Blender versions. Update user documentation when controls or behavior change.
+Changes to Blender storage, dynamic modifiers, backup/restore, or operators require Blender integration checks. New geometry behavior should have a small synthetic regression case. Explain what changed, why, what was tested, and any unverified Blender versions. Update user documentation when controls or behavior change.
 
 ## Public repository hygiene
 

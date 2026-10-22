@@ -47,6 +47,15 @@ def main() -> int:
         print("Blender integration tests failed", file=sys.stderr)
         return 1
     print(f"Blender integration: {report['passed_count']}/{report['case_count']} passed")
+    dynamic_path = output.with_name('dynamic.json')
+    if not dynamic_path.is_file():
+        print('Dynamic modifier report is missing', file=sys.stderr)
+        return 1
+    dynamic = json.loads(dynamic_path.read_text(encoding='utf-8'))
+    if not dynamic.get('all_passed'):
+        print('Dynamic modifier integration tests failed', file=sys.stderr)
+        return 1
+    print(f"Dynamic modifiers: {dynamic['passed_count']}/{dynamic['case_count']} passed")
     return 0
 
 

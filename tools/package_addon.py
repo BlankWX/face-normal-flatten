@@ -12,16 +12,16 @@ from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 ADDON_CODE = tuple(f"face_normal_flatten/{name}" for name in
-                   ("__init__.py", "core.py", "storage.py"))
+                   ("__init__.py", "core.py", "storage.py", "dynamic.py"))
 DOCUMENTS = ("README.md", "README_EN.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
              "CHANGELOG.md", "CONTRIBUTING.md", "docs/algorithm.md", "docs/testing.md",
-             "docs/publishing.md")
+             "docs/publishing.md", "docs/releases/v1.2.0.md")
 SOURCE_FILES = (
     *ADDON_CODE, *DOCUMENTS, ".gitignore", ".gitattributes", ".editorconfig",
     ".github/workflows/ci.yml", ".github/ISSUE_TEMPLATE/bug_report.yml",
     ".github/ISSUE_TEMPLATE/feature_request.yml", ".github/PULL_REQUEST_TEMPLATE.md",
     "tests/test_core.py", "tests/test_jaw_offset.py", "tests/test_packaging.py",
-    "tests/blender/test_generality.py", "tests/blender/run_tests.py",
+    "tests/blender/test_generality.py", "tests/blender/test_dynamic.py", "tests/blender/run_tests.py",
     "tools/package_addon.py", "tools/test_blender.py",
 )
 PRIVATE_PATTERNS = (
