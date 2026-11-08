@@ -11,7 +11,7 @@ from mathutils import Vector
 
 import face_normal_flatten as addon
 from face_normal_flatten.core import slerp_normal
-from face_normal_flatten.dynamic import _raw_custom
+from face_normal_flatten.backup import read_raw_normals
 from test_generality import _face_patch, _TemporaryScene, _max_angle, _mesh_snapshot, _assert_geometry_unchanged
 
 
@@ -53,16 +53,23 @@ def endpoints(obj, result):
 def patch(owner, **kwargs):
     obj = owner.create('dynamic', *_face_patch(**kwargs))
     obj.fnf_settings.effect_mode = 'DYNAMIC'
-    obj.fnf_settings.direction = 'NEG_Y'
     return obj
 
 
 def default_creation(owner):
     obj = patch(owner, cells=24, holes=((7,10,14,17),))
+    settings = obj.fnf_settings
+    assert settings.direction == 'NEG_Y'
+    assert 'AUTO' not in settings.bl_rna.properties['direction'].enum_items.keys()
+    # Simulate the enum integers serialized by v1.2.0.
+    for stored, direction in enumerate(('NEG_Y', 'NEG_Y', 'Y', 'X', 'NEG_X', 'Z', 'NEG_Z', 'CUSTOM')):
+        settings['direction'] = stored
+        assert settings.direction == direction
+    settings['direction'] = 0
     before = _mesh_snapshot(obj.data)
     result = addon.apply_effect(obj)
     mod = obj.modifiers[result['modifier']]
-    assert (mod.type,mod.mode,mod.mix_mode) == ('NORMAL_EDIT','RADIAL','ADD')
+    assert (mod.type,mod.mode,mod.mix_mode) == ('NORMAL_EDIT','RADIAL','COPY')
     assert tuple(mod.offset) == (0.0,2.0,0.0)
     assert mod.mix_factor == 1 and abs(mod.mix_limit-math.pi)<1e-6 and mod.no_polynors_fix
     assert mod.target is None and not mod.use_direction_parallel
@@ -107,15 +114,15 @@ def existing_preservation(owner):
 def migrate_static(owner):
     obj=patch(owner)
     obj.data.normals_split_custom_set([tuple(n.vector) for n in obj.data.corner_normals])
-    original=_raw_custom(obj.data)
+    original=read_raw_normals(obj.data)
     mod=obj.modifiers.new('Original','NORMAL_EDIT'); mod.offset=(0,2,0);mod.mix_mode='ADD'
     addon.apply_flatten(obj)
-    assert not mod.show_viewport and _raw_custom(obj.data)!=original
+    assert not mod.show_viewport and read_raw_normals(obj.data)!=original
     result=addon.apply_effect(obj)
-    assert mod.show_viewport and _raw_custom(obj.data)==original
+    assert mod.show_viewport and read_raw_normals(obj.data)==original
     metrics=endpoints(obj,result)
     addon.restore_normals(obj)
-    assert _raw_custom(obj.data)==original and not mod.show_viewport
+    assert read_raw_normals(obj.data)==original and not mod.show_viewport
     return {'original_raw_storage_restored':True,**metrics}
 
 
@@ -248,6 +255,17 @@ def invalid_rejection(owner):
     assert not obj.modifiers and addon.STATE not in obj.data
     # Delete only this fixture's shared object; leave owner cleanup ownership intact.
     owner.objects.remove(shared);bpy.data.objects.remove(shared,do_unlink=True)
+    attribute = obj.data.attributes.new(addon.BASE, 'FLOAT', 'POINT')
+    attribute.data[0].value = 0.25
+    try:
+        addon.apply_effect(obj)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('Conflicting backup attribute was accepted')
+    assert obj.data.attributes[addon.BASE].data[0].value == 0.25
+    assert addon.STATE not in obj.data and not obj.modifiers
+    obj.data.attributes.remove(obj.data.attributes[addon.BASE])
     addon.apply_effect(obj)
     old_mods=list(obj.modifiers)
     obj.fnf_settings.root_group='Missing'
@@ -267,7 +285,7 @@ def rollback_and_deleted_modifier(owner):
     normal=obj.modifiers.new('Existing','NORMAL_EDIT')
     obj.modifiers.new('Armature placeholder','ARMATURE')
     addon.apply_flatten(obj)
-    original_raw=_raw_custom(obj.data)
+    original_raw=read_raw_normals(obj.data)
     original_state=obj.data[addon.STATE]
     original_weights=[x.value for x in obj.data.attributes[addon.WEIGHT].data]
     real_move=dynamic._move
@@ -280,7 +298,7 @@ def rollback_and_deleted_modifier(owner):
         try:addon.apply_effect(obj)
         except RuntimeError:pass
         else:raise AssertionError('Injected mutation failure was not raised')
-    assert _raw_custom(obj.data)==original_raw
+    assert read_raw_normals(obj.data)==original_raw
     assert obj.data[addon.STATE]==original_state
     assert [x.value for x in obj.data.attributes[addon.WEIGHT].data]==original_weights
     assert not obj.vertex_groups and list(obj.modifiers).index(normal)==0 and not normal.show_viewport

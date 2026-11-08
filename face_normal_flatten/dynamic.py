@@ -6,6 +6,10 @@ import math
 
 import bpy
 
+from .backup import (STATE, WEIGHT, discard_backup, read_raw_normals, restore_base_normals,
+                     snapshot, write_raw_normals)
+from .transition import calculate_flatten
+
 GROUP = 'FNF_Transition'
 SWITCHES = ('vertex_group', 'invert_vertex_group', 'show_viewport', 'show_render')
 
@@ -28,7 +32,6 @@ def _bound_modifier(obj, saved):
 
 
 def _state(obj):
-    from . import STATE
     return json.loads(obj.data.get(STATE, '{}')).get('dynamic')
 
 
@@ -69,27 +72,6 @@ def _move(obj, modifier, index):
             raise RuntimeError('无法将法线编辑移动至骨架之后。')
 
 
-def _raw_custom(mesh):
-    attr = mesh.attributes.get('custom_normal')
-    if not attr:
-        return None
-    field = 'vector' if attr.data_type == 'FLOAT_VECTOR' else 'value'
-    return (attr.data_type, attr.domain, field,
-            [tuple(getattr(item, field)) for item in attr.data])
-
-
-def _put_raw(mesh, saved):
-    attr = mesh.attributes.get('custom_normal')
-    if attr:
-        mesh.attributes.remove(attr)
-    if saved:
-        kind, domain, field, values = saved
-        attr = mesh.attributes.new('custom_normal', kind, domain)
-        for item, value in zip(attr.data, values):
-            setattr(item, field, value)
-    mesh.update()
-
-
 def _scope_weights(obj, state):
     original = state['original']
     name = original['vertex_group']
@@ -105,8 +87,6 @@ def _scope_weights(obj, state):
 
 
 def apply_dynamic(obj, settings=None):
-    from . import (BASE, RAW, STATE, WEIGHT, calculate_flatten, restore_base_normals,
-                   snapshot)
     settings = settings or obj.fnf_settings
     result, forward, backup = calculate_flatten(obj, settings)
     previous = backup.get('dynamic') if backup else None
@@ -133,7 +113,7 @@ def apply_dynamic(obj, settings=None):
         group_name = f'{GROUP}.{suffix:03d}'
         suffix += 1
     mesh = obj.data
-    raw_before = _raw_custom(mesh)
+    raw_before = read_raw_normals(mesh)
     json_before = mesh.get(STATE)
     switches_before = {k: getattr(modifier, k) for k in SWITCHES} if modifier else None
     index_before = list(obj.modifiers).index(modifier) if modifier else None
@@ -143,8 +123,8 @@ def apply_dynamic(obj, settings=None):
     attr_before = ([x.value for x in mesh.attributes[WEIGHT].data]
                    if mesh.attributes.get(WEIGHT) else None)
     new_modifier = new_group = False
+    state = snapshot(obj)
     try:
-        state = snapshot(obj)
         # v1 migration: restore pre-flatten custom normals, keeping the backup.
         # The native modifier now receives normals after armature/shape deformation.
         restore_base_normals(mesh, state)
@@ -153,7 +133,7 @@ def apply_dynamic(obj, settings=None):
             new_modifier = True
             modifier.mode = 'RADIAL'
             modifier.offset = (0.0, 2.0, 0.0)
-            modifier.mix_mode = 'ADD'
+            modifier.mix_mode = 'COPY'
             modifier.mix_factor = 1.0
             modifier.mix_limit = math.pi
             modifier.no_polynors_fix = True
@@ -193,19 +173,14 @@ def apply_dynamic(obj, settings=None):
             for index, weight in enumerate(old_weights):
                 if weight is not None:
                     group.add([index], weight, 'REPLACE')
-        _put_raw(mesh, raw_before)
+        write_raw_normals(mesh, raw_before)
         attr = mesh.attributes.get(WEIGHT)
         if attr_before is None and attr:
             mesh.attributes.remove(attr)
         elif attr_before is not None:
             attr.data.foreach_set('value', attr_before)
         if json_before is None:
-            for name in (BASE, RAW):
-                attr = mesh.attributes.get(name)
-                if attr:
-                    mesh.attributes.remove(attr)
-            if STATE in mesh:
-                del mesh[STATE]
+            discard_backup(mesh)
         else:
             mesh[STATE] = json_before
         raise

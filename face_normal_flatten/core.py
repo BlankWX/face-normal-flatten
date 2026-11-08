@@ -207,6 +207,27 @@ def _transform_coordinates(coordinates, world_matrix):
     return result, matrix
 
 
+def _outer_roots(loop, coordinates, adjacency):
+    """Skip a slit where the outline doubles back exactly from a shared tip."""
+    count = len(loop)
+    roots = set(loop)
+    for tip, vertex in enumerate(loop):
+        previous_left = previous_right = vertex
+        for step in range(1, (count - 1) // 2 + 1):
+            left = loop[(tip - step) % count]
+            right = loop[(tip + step) % count]
+            if coordinates[left] != coordinates[right]:
+                break
+            # The last matched pair is the mouth, still on the outer rim.
+            roots.discard(previous_left)
+            roots.discard(previous_right)
+            # Let distances cross the two banks without welding the mesh.
+            adjacency[left].append((right, 0.0))
+            adjacency[right].append((left, 0.0))
+            previous_left, previous_right = left, right
+    return roots
+
+
 def flatten_normals(coordinates, edges, polygons, original_corner_normals, forward,
                     *, transition_ratio=0.30, root_hold_ratio=0.02,
                     protect_vertex_ids=None, world_matrix=None, up_axis=None,
@@ -396,7 +417,7 @@ def flatten_normals(coordinates, edges, polygons, original_corner_normals, forwa
             else:
                 outer["is_outer"] = True
                 if not explicit_roots:
-                    roots.update(outer["vertex_ids"])
+                    roots.update(_outer_roots(outer["vertex_ids"], coordinates, adjacency))
         component_quality.append(quality)
         if not any(vertex in roots for vertex in vertices):
             if explicit_roots:

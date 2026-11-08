@@ -12,10 +12,12 @@ from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 ADDON_CODE = tuple(f"face_normal_flatten/{name}" for name in
-                   ("__init__.py", "core.py", "storage.py", "dynamic.py"))
+                   ("__init__.py", "backup.py", "core.py", "dynamic.py", "effects.py",
+                    "reset.py", "storage.py", "transition.py"))
 DOCUMENTS = ("README.md", "README_EN.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
              "CHANGELOG.md", "CONTRIBUTING.md", "docs/algorithm.md", "docs/testing.md",
-             "docs/publishing.md", "docs/releases/v1.2.0.md")
+             "docs/publishing.md", "docs/releases/v1.2.0.md", "docs/releases/v1.2.1.md",
+             "docs/releases/v1.2.2.md", "docs/releases/v1.2.3.md")
 SOURCE_FILES = (
     *ADDON_CODE, *DOCUMENTS, ".gitignore", ".gitattributes", ".editorconfig",
     ".github/workflows/ci.yml", ".github/ISSUE_TEMPLATE/bug_report.yml",

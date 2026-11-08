@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.3
+
+- Add an undoable panel button to reset base normals across selected meshes or reset selected normal vectors in Edit Mode.
+
+## 1.2.2
+
+- Separate mesh adaptation, normal backups, and effect workflows from Blender registration. Static and dynamic modes use the same transition solver and raw-normal restoration code. Existing scripting entry points remain available.
+- Preserve a pre-existing mesh attribute when its name conflicts with a new backup.
+
+## 1.2.1
+
+- Exclude doubled-back, coincident seams from automatic contour roots to correct localized chin shadows.
+- Use local -Y as the default direction and remove automatic direction estimation. Keep saved manual axes and custom vectors.
+- Create Normal Edit modifiers with the COPY mix mode.
+
 ## 1.2.0
 
 - Add dynamic modifier transition as the default UI mode, keeping native Normal Edit after the armature.

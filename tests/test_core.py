@@ -116,6 +116,33 @@ def closed_sphere(rings=12, segments=24):
 
 
 class FlattenGeneralityTests(unittest.TestCase):
+    def test_outer_slit_matches_unsplit_surface_and_preserves_open_notch(self):
+        forward = (0, -1, 0)
+        coords, edges, faces, normals = curved_face(12)
+        baseline = core.flatten_normals(coords, edges, faces, normals, forward)
+        # Open the lower four edges of the center column on their right side.
+        bank = [row * 13 + 6 for row in range(4)]
+        duplicates = {v: len(coords) + i for i, v in enumerate(bank)}
+        split = coords + [coords[v] for v in bank]
+        split_faces = [tuple(duplicates.get(v, v) for v in face) if i % 12 >= 6 else face
+                       for i, face in enumerate(faces)]
+        result = core.flatten_normals(split, None, split_faces, normals, forward)
+        self.assertEqual(result["weights"], baseline["weights"] + [baseline["weights"][v] for v in bank])
+        self.assertEqual(result["corner_normals"], baseline["corner_normals"])
+        tip = 4 * 13 + 6
+        self.assertNotIn(tip, result["root_vertex_ids"])
+        manual = core.flatten_normals(split, None, split_faces, normals, forward,
+                                      protect_vertex_ids=[tip])
+        self.assertEqual(manual["root_vertex_ids"], [tip])
+        self.assertEqual(manual["weights"][tip], 0.0)
+        # A real gap, even a very narrow one, keeps its original outline.
+        for v in duplicates.values():
+            x, y, z = split[v]
+            split[v] = (x + 1e-7, y, z)
+        open_notch = core.flatten_normals(split, None, split_faces, normals, forward)
+        self.assertTrue(set(bank + list(duplicates.values()) + [tip])
+                        <= set(open_notch["root_vertex_ids"]))
+
     def assertVectorAlmostEqual(self, actual, expected, places=10):
         self.assertEqual(len(actual), len(expected))
         for a, b in zip(actual, expected):

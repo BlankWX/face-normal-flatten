@@ -13,7 +13,13 @@ For a shading issue, include front and oblique views under the same lighting. Fo
 - `face_normal_flatten/core.py`: pure Python geometry and normal blending.
 - `face_normal_flatten/storage.py`: Blender custom-normal encoding.
 - `face_normal_flatten/dynamic.py`: native modifier creation, transition masks, migration, and restoration.
-- `face_normal_flatten/__init__.py`: Blender operators, backup state, and interface.
+- `face_normal_flatten/transition.py`: map Blender regions, directions, and corner indices to and from the geometry solver.
+- `face_normal_flatten/backup.py`: mesh backup format, validation, and restoration of raw normals.
+- `face_normal_flatten/reset.py`: reset base normals for selected objects or selected mesh elements.
+- `face_normal_flatten/effects.py`: dispatch between modes, apply static results, and coordinate restoration.
+- `face_normal_flatten/__init__.py`: Blender registration, interface, operators, and compatibility exports for scripts.
+
+Keep dependencies one-way. Operators call the workflows, which use the mesh adapter and backup functions. Import shared behavior from its owning module. Keep geometry changes testable with plain Python data.
 
 Keep the pure core independent of Blender. Preserve exact zero-offset compatibility, protected-root behavior, corner correspondence, deformation-aware storage, and restoration. Do not silently discard invalid backups or guess a face region on an entire character.
 

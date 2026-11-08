@@ -15,6 +15,7 @@ import time
 import traceback
 import uuid
 
+import bmesh
 import bpy
 from mathutils import Quaternion, Vector
 
@@ -271,7 +272,7 @@ def _check_restored(owner, obj, before):
             **attribute_diagnostics}
 
 
-def _grid_case(owner, label, *, expected_forward=(0, -1, 0), direction='AUTO',
+def _grid_case(owner, label, *, expected_forward=(0, -1, 0), direction='NEG_Y',
                object_scale=(1, 1, 1), object_rotation=(0, 0, 0), expected_inner_loops=0, **kwargs):
     obj = owner.create(label, *_face_patch(**kwargs))
     obj.scale = object_scale
@@ -285,17 +286,8 @@ def _grid_case(owner, label, *, expected_forward=(0, -1, 0), direction='AUTO',
     settings.root_hold_ratio = 0.02
     before = _mesh_snapshot(obj.data)
     _require(not before['custom_normals'], "Synthetic fixture unexpectedly has custom normals")
-    auto_diagnostics = {}
-    if direction == 'AUTO':
-        nominal_forward = expected_forward
-        expected_forward = tuple(addon.detect_forward(obj.data))
-        nominal_offset = _angle_degrees(expected_forward, nominal_forward)
-        _require(nominal_offset < 1.0, "Auto detected a direction inconsistent with the synthetic face front")
-        auto_diagnostics = {"auto_expected_forward": list(expected_forward),
-                            "auto_nominal_front_offset_deg": nominal_offset}
     result = addon.apply_flatten(obj)
     measurements = _check_applied(obj, before, result, expected_forward)
-    measurements.update(auto_diagnostics)
     _require(result['stats']['ignored_inner_loop_count'] == expected_inner_loops,
              "Eye/mouth opening classification differs from expected")
     first = _normals(obj.data)
@@ -531,6 +523,62 @@ def _jaw_offset_case(owner):
             'offset_cases': offset_measurements, **restored}
 
 
+def _reset_object_case(owner):
+    patch = _face_patch(cells=8)
+    def custom_mesh(label):
+        obj = owner.create(label, *patch)
+        obj.data.normals_split_custom_set([(1, 0, 0)] * len(obj.data.loops))
+        return obj
+
+    reference = custom_mesh('native_reset')
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.normals_tools(mode='RESET')
+    bpy.ops.object.mode_set(mode='OBJECT')
+    expected = _normals(reference.data)
+    untouched = custom_mesh('unselected')
+    original = _normals(untouched.data)
+    first = custom_mesh('reset_with_backup')
+    addon.apply_effect(first)
+    backup = first.data[addon.STATE]
+    second = custom_mesh('reset_without_backup')
+    first.select_set(True)
+    assert bpy.ops.object.fnf_reset_normals() == {'FINISHED'}
+    for obj in (first, second):
+        assert not obj.data.has_custom_normals and obj.select_get()
+        assert _max_angle(_normals(obj.data), expected) < 0.1
+    assert bpy.context.object == second and second.mode == 'OBJECT'
+    assert _normals(untouched.data) == original
+    assert first.data[addon.STATE] == backup and first.modifiers[-1].type == 'NORMAL_EDIT'
+    addon.restore_normals(first)
+    assert _normals(first.data) == original
+    return {'compared_to_native': True, 'selected_meshes': 2}
+
+
+def _reset_edit_selection_case(owner):
+    coords = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (2, 0, 0), (3, 0, 0), (2, 1, 0)]
+    obj = owner.create('partial_reset', coords, [(0, 1, 2), (3, 4, 5)])
+    mesh = obj.data
+    mesh.normals_split_custom_set([(1, 0, 0)] * 6)
+    original = _normals(mesh)
+    bpy.ops.object.mode_set(mode='EDIT')
+    try:
+        bpy.ops.mesh.select_all(action='DESELECT')
+        assert bpy.ops.object.fnf_reset_normals() == {'CANCELLED'}
+        bm = bmesh.from_edit_mesh(mesh)
+        bm.faces.ensure_lookup_table()
+        bm.faces[0].select_set(True)
+        bmesh.update_edit_mesh(mesh)
+        assert bpy.ops.object.fnf_reset_normals() == {'FINISHED'}
+        assert obj.mode == 'EDIT' and mesh.total_vert_sel == 3
+    finally:
+        bpy.ops.object.mode_set(mode='OBJECT')
+    normals = _normals(mesh)
+    assert _max_angle(normals[:3], [(0, 0, 1)] * 3) < 0.1
+    assert _max_angle(normals[3:], original[3:]) < 0.1
+    return {'reset_corners': 3, 'preserved_corners': 3}
+
+
 def run(output_path=None):
     """Run all fixtures, remove them in finally, and return a JSON-safe report."""
     output_path = (Path(output_path) if output_path is not None
@@ -544,7 +592,9 @@ def run(output_path=None):
     upright = Quaternion(Vector((1, 0, 0)), -math.pi / 2.0)
     custom_forward = tuple(arbitrary @ Vector((0, -1, 0)))
     fixtures = [
-        ('quad_standard_auto', lambda: _grid_case(owner, 'quad_standard_auto', cells=20)),
+        ('reset_selected_objects', lambda: _reset_object_case(owner)),
+        ('reset_edit_selection', lambda: _reset_edit_selection_case(owner)),
+        ('quad_standard_neg_y', lambda: _grid_case(owner, 'quad_standard_neg_y', cells=20)),
         ('triangle_wide_small', lambda: _grid_case(owner, 'triangle_wide_small', cells=24, width=1.4,
                                                  height=1.1, depth=0.15, triangulate=True, size=0.01,
                                                  direction='NEG_Y')),

@@ -2,6 +2,18 @@
 
 The tested Blender build is **5.2.2 LTS**. The add-on declares Blender **5.2** as its minimum version; this is not a claim that all later Blender versions have been validated.
 
+## v1.2.3 validation record
+
+On Blender 5.2.2 LTS, all 24 integration cases passed. Two reset cases cover multiple selected meshes, numerical comparison to native Reset Vectors, restoration from an existing backup, and partial and empty Edit Mode selections.
+
+## v1.2.2 validation record
+
+On 2026-11-08, all 41 Python tests and 22 Blender 5.2.2 LTS integration cases passed. The rejection case also verifies that a pre-existing attribute with a reserved backup name survives a failed application. In separate background processes, the v1.2.1 and v1.2.2 installation archives produced byte-identical float arrays for 900 face weights and 5,034 evaluated corner normals on the same character. The evaluated normals after restoring also matched.
+
+## v1.2.1 validation record
+
+On 2026-11-08, 41 Python tests and all 22 Blender 5.2.2 LTS integration cases passed. The seam regression compares all weights and corner normals to an unsplit synthetic surface. It also checks a narrow open notch and explicit roots. Blender checks cover the default axis, saved enum values, and the COPY creation preset. A local character comparison used the same pose, viewing directions and diagnostic light before and after updating the transition.
+
 ## v1.2.0 validation record
 
 Local checks completed on **2026-10-22**:
@@ -23,7 +35,7 @@ From the repository root:
 python -m unittest discover -s tests -v
 ```
 
-The 34 algorithm tests cover boundary/root selection, holes, disconnected components, geometry validation, interpolation endpoints, transforms, topology signatures, and jaw-offset behavior. Additional packaging tests check public-file isolation, license inclusion, path validation, and reproducible archives. These tests do not import Blender or validate Blender's normal storage.
+The 35 algorithm tests cover boundary/root selection, holes, disconnected components, geometry validation, interpolation endpoints, transforms, topology signatures, and jaw-offset behavior. Additional packaging tests check public-file isolation, license inclusion, path validation, and reproducible archives. These tests do not import Blender or validate Blender's normal storage.
 
 ## Blender integration checks
 
@@ -35,7 +47,7 @@ python tools/test_blender.py --blender /path/to/blender
 
 The runner starts Blender in background mode with factory settings and executes `tests/blender/test_generality.py` and `tests/blender/test_dynamic.py`. It generates temporary synthetic meshes and cleans up its fixtures. Use a separate invocation of the executable; no connection to a running scene is required.
 
-The 12 integration cases include quad/triangle patches, different proportions and scales, rotated/custom directions, nonuniform object transforms, eye/mouth holes, a face region on a closed head, shared-data rejection before and after backup, rejection of an incompatible diagnostic attribute, and signed jaw adjustments. They check normal accuracy, repeated application, restoration, protected upper/root bands, and preservation of unrelated mesh data where applicable. Generated JSON reports and logs are written to the ignored `tests/output/` directory.
+The 14 general integration cases include whole-mesh and partial-selection normal resets, quad/triangle patches, different proportions and scales, rotated/custom directions, nonuniform object transforms, eye/mouth holes, a face region on a closed head, shared-data rejection before and after backup, rejection of an incompatible diagnostic attribute, and signed jaw adjustments. They check normal accuracy, repeated application, restoration, protected upper/root bands, and preservation of unrelated mesh data where applicable. Generated JSON reports and logs are written to the ignored `tests/output/` directory.
 
 Ten additional dynamic cases check actual native modifier creation and preset values, preservation/reordering of existing modifiers, mask multiplication and inversion, static-backup migration, reuse after rename, collisions and ambiguous selection, shape keys and nonuniform transforms, region exclusion, jaw control, saved-library persistence, failure without mutation, rollback after an injected mutation failure, and recreation after a managed modifier is deleted. Animated rig checks compare zero/full influence endpoints against evaluated native normals at multiple frames without reapplying. A one-light cosine-response check demonstrates the selected turning-head case; it is not a guarantee for arbitrary lighting.
 
